@@ -1,55 +1,59 @@
 import re
 
-def remove_comments(text):
-    # Remove single-line comments
-    text = re.sub(r'\/\/.*', '', text)
+def parse_enum(c_code):
+    enum_dict = {}
 
-    # Remove multi-line comments
-    text = re.sub(r'\/\*.*?\*\/', '', text, flags=re.DOTALL)
+    # Regular expression to match typedef enum
+    enum_pattern = re.compile(r'typedef\s+enum\s*{([^}]*)}\s*([^;]+);', re.DOTALL)
 
-    return text
+    # Regular expression to match enum values and comments
+    enum_values_pattern = re.compile(r'(\w+)\s*(?:=\s*([^,]+))?,?\s*(?:\/\*([^*]+)\*\/)?')
 
-def parse_typedef_enum(text):
-    enum_pattern = re.compile(r'typedef\s+enum\s*{([^}]*)}\s*([^;]+);')
-    matches = enum_pattern.finditer(text)
+    # Find typedef enum
+    enum_match = enum_pattern.search(c_code)
 
-    enums = []
+    if enum_match:
+        enum_body = enum_match.group(1)
+        enum_name = enum_match.group(2)
 
-    for match in matches:
-        enum_body = match.group(1)
-        enum_name = match.group(2).strip()
-        
-        enum_values = [item.strip() for item in enum_body.split(',')]
-        
-        enums.append({
-            'name': enum_name,
-            'values': enum_values
-        })
+        # Find enum values and comments
+        enum_values_matches = enum_values_pattern.findall(enum_body)
 
-    return enums
+        # Store in dictionary
+        enum_values = []
+        for value, default_value, comment in enum_values_matches:
+            enum_values.append({
+                'name': value,
+                'default_value': default_value if default_value else None,
+                'comment': comment.strip() if comment else None
+            })
 
-def main():
-    input_file_path = 'header.h'
-    output_file_path = 'output_file.h'
+        enum_dict[enum_name] = enum_values
 
-    with open(input_file_path, 'r') as file:
-        file_content = file.read()
+    return enum_dict
 
-    # Remove comments
-    cleaned_content = remove_comments(file_content)
+# Example usage
+c_code = """
+typedef enum {
+    ENUM_VALUE_1,   /**< Comment for ENUM_VALUE_1 */
+    ENUM_VALUE_2 = 5,   /**< Comment for ENUM_VALUE_2 */
+    ENUM_VALUE_3    /**< Comment for ENUM_VALUE_3 */
+} MyEnum;
 
-    # Parse and extract typedef enums
-    enums = parse_typedef_enum(cleaned_content)
+typedef enum {
+    ANOTHER_VALUE_1 = 10,   /**< Comment for ANOTHER_VALUE_1 */
+    ANOTHER_VALUE_2,   /**< Comment for ANOTHER_VALUE_2 */
+    ANOTHER_VALUE_3 = 15   /**< Comment for ANOTHER_VALUE_3 */
+} AnotherEnum;
+"""
 
-    # Print or do something with the extracted enums
-    for enum in enums:
-        print(f"Enum Name: {enum['name']}")
-        print(f"Enum Values: {enum['values']}")
+enum_dict = parse_enum(c_code)
+
+for enum_name, enum_values in enum_dict.items():
+    print(f"Enum Name: {enum_name}")
+    print("Enum Values:")
+    for enum_value in enum_values:
+        print(f"  Name: {enum_value['name']}")
+        print(f"  Default Value: {enum_value['default_value']}")
+        print(f"  Comment: {enum_value['comment']}")
         print()
-
-    # Optionally, save the cleaned content to a new file
-    with open(output_file_path, 'w') as output_file:
-        output_file.write(cleaned_content)
-
-if __name__ == "__main__":
-    main()
